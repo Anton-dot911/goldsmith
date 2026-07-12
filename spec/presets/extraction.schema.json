@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Extraction expected",
+  "description": "Target of a field-extraction example. Replace these fields with the Pydantic-mirrored schema of your extractor (e.g. DocFlow InvoiceData). Input is {\"file_ref\": \"storage://...\"} or {\"text\": \"...\"}.",
+  "type": "object",
+  "properties": {
+    "invoice_number": { "type": "string" },
+    "issue_date": { "type": "string", "format": "date" },
+    "total_amount": { "type": "number" },
+    "currency": { "type": "string" }
+  },
+  "required": ["invoice_number", "total_amount"],
+  "additionalProperties": true
+}

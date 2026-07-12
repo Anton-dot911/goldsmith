@@ -1,0 +1,9 @@
+dist/
+coverage/
+pnpm-lock.yaml
+data/
+
+# Author-owned spec/contract docs — kept verbatim, not reformatted.
+CLAUDE.md
+docs/PLAN.md
+docs/TZ.md

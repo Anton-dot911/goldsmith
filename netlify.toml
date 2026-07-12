@@ -1,0 +1,17 @@
+# Netlify deploy config. The web/ package is the Vite app; netlify/functions/
+# holds the server-side AI pre-label call (added in T5) — the only backend
+# code, so the API key stays off the browser. Datasets CRUD talks to Supabase
+# directly from the browser with the anon key (RLS confines it).
+[build]
+  command = "pnpm install --no-frozen-lockfile && pnpm --filter ./web build"
+  publish = "web/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# SPA fallback so client-side routes resolve to the app shell.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

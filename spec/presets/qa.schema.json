@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QA expected",
+  "description": "Question-answering target. Input is {\"question\": \"...\"}; expected records whether the question is answerable, the answer, and a source hint.",
+  "type": "object",
+  "properties": {
+    "answerable": { "type": "boolean" },
+    "answer": { "type": "string" },
+    "source_hint": { "type": "string" }
+  },
+  "required": ["answerable", "answer"],
+  "additionalProperties": false
+}
