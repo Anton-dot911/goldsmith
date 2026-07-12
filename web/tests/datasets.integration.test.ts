@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
-import { afterAll, describe, expect, it } from "vitest";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 // Integration test against the real Supabase project. Opt-in: it only runs
 // when GOLDSMITH_INTEGRATION=1 and the anon credentials are present, so the
@@ -11,9 +11,17 @@ const anonKey = process.env.SUPABASE_ANON_KEY;
 const enabled = process.env.GOLDSMITH_INTEGRATION === "1" && Boolean(url) && Boolean(anonKey);
 
 describe.skipIf(!enabled)("datasets (live Supabase, anon key + RLS)", () => {
-  const supabase = createClient(url as string, anonKey as string);
+  // Built in beforeAll, not at suite-collection time: when the suite is
+  // skipped its callback still runs during collection, and creating the client
+  // eagerly would throw "supabaseUrl is required" wherever the env is unset
+  // (e.g. CI). beforeAll does not run for a skipped suite.
+  let supabase: SupabaseClient;
   const slug = `it-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   let createdId: string | null = null;
+
+  beforeAll(() => {
+    supabase = createClient(url as string, anonKey as string);
+  });
 
   afterAll(async () => {
     if (createdId !== null) {
