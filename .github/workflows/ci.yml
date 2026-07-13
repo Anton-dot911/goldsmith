@@ -1,0 +1,49 @@
+# One explicit job per workspace package instead of a strategy matrix: template
+# files must stay free of GitHub `$` expressions because the scaffolder's
+# placeholder scan forbids any leftover double braces in substituted output.
+name: CI
+
+on:
+  push:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # No lockfile is committed at scaffold time; switch to --frozen-lockfile
+      # once pnpm-lock.yaml is committed after the first install.
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm lint
+
+  shared:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm --filter ./shared typecheck
+      - run: pnpm --filter ./shared test
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm --filter ./web typecheck
+      - run: pnpm --filter ./web test
+      - run: pnpm --filter ./web build

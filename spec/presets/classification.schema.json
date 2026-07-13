@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Classification expected",
+  "description": "Single-label classification target. Input is {\"text\": \"...\"}; expected is one label from the enum. Replace the enum with your own labels.",
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string",
+      "enum": ["positive", "negative", "neutral"]
+    }
+  },
+  "required": ["label"],
+  "additionalProperties": false
+}
