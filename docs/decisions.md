@@ -81,3 +81,69 @@ JSON Schemas matching the input/expected conventions in PLAN.md. `extraction`
 ships an invoice-shaped placeholder the user replaces with their real
 extractor schema; `routing`/`qa`/`classification` encode their fixed expected
 shapes. `custom` has no preset file — the form prefills a minimal open object.
+
+---
+
+## T2 — Examples core + validation (2026-07-13)
+
+### Revisioning model: one row per id, `revision` bumped in place
+
+The task offered two ways to satisfy rule 3 ("edits create a new revision"):
+keep one row per example id and bump `revision` in place, or keep revision
+history rows. **Chose in-place bump** — the simpler option that the existing
+schema already dictates:
+
+- `examples.id` is `text primary key` in the 001 DDL — one row per id. History
+  rows would need a composite key or a separate table, i.e. a migration, and
+  the T2 brief says no migration is expected.
+- The export contract consumes _active examples of a version_, not history, so
+  prior revision bodies are never exported. Keeping them would be dead weight.
+
+What this preserves: the example `id` is stable forever (rule 3, export
+contract), an edit is always a _new revision of the same id_ (`revision + 1`,
+`updated_at` bumped, other identity fields untouched), and "delete" is
+`active=false` with symmetric reactivation — a row is never removed. The
+trade-off consciously accepted: the _previous expected value_ is overwritten in
+place rather than retained. The hard-cases signal that rule 4 cares about (AI
+draft vs final) is captured separately in `ai_draft` (T5), not in revision
+history, so nothing of eval value is lost. `revision` is the count of human
+edits, and the `updated_at`/`revision` pair is the audit trail.
+
+Implementation split: the rules are pure functions in
+`web/src/lib/example-model.ts` (`newExampleInsert`, `reviseExample`,
+`setActive`, `activeExamples`) so they unit-test without a database;
+`web/src/lib/examples.ts` maps them onto Supabase calls. On an edit-update we
+set `revision` and `updated_at` explicitly — the DDL `now()` default only fires
+on insert.
+
+### Example ids: `ex_` + ULID
+
+Ids are `ex_` followed by a 26-char Crockford-base32 ULID
+(`web/src/lib/ulid.ts`), matching the export contract's `"id": "ex_01J..."`.
+ULID (time-ordered + random) gives stable, sortable, collision-free ids
+generated client-side at creation — no DB round-trip, stable across versions.
+Kept dependency-free (small pure module) rather than adding the `ulid` package.
+
+### Save-gate errors (rule 2)
+
+`web/src/lib/validate.ts` compiles the dataset's `json_schema` with the same
+ajv config as `lib/schema.ts` (`strict:false`, `allErrors:true`, formats) and
+maps each `ErrorObject` to a `{ path, message }` row. For `required` /
+`additionalProperties` the offending property name is folded into the path so a
+missing `amount` reads as path `amount` (not the parent). This gives the
+human-readable list the form renders — never a JSON dump. The null-vs-missing
+distinction falls out of JSON Schema semantics: a missing required field yields
+a `required` error, whereas `field: null` yields a `type` error (present but
+wrong type), and both are asserted in `web/tests/validate.test.ts`.
+
+### Provenance / version stamping
+
+Manual adds are `human_only` (rule 4; the AI path is T5). `version_added` is
+stamped from the dataset's `current_version` at insert. `active`, `revision`,
+`ai_draft`, and timestamps ride the DDL defaults on insert.
+
+### Navigation
+
+No router added yet — `App.tsx` holds a single `selected: DatasetRow | null` in
+state; clicking a dataset row opens `DatasetDetail`. A real router lands with
+the Label/Import routes in T4.
