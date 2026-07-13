@@ -96,14 +96,14 @@ schema already dictates:
 - `examples.id` is `text primary key` in the 001 DDL — one row per id. History
   rows would need a composite key or a separate table, i.e. a migration, and
   the T2 brief says no migration is expected.
-- The export contract consumes *active examples of a version*, not history, so
+- The export contract consumes _active examples of a version_, not history, so
   prior revision bodies are never exported. Keeping them would be dead weight.
 
 What this preserves: the example `id` is stable forever (rule 3, export
-contract), an edit is always a *new revision of the same id* (`revision + 1`,
+contract), an edit is always a _new revision of the same id_ (`revision + 1`,
 `updated_at` bumped, other identity fields untouched), and "delete" is
 `active=false` with symmetric reactivation — a row is never removed. The
-trade-off consciously accepted: the *previous expected value* is overwritten in
+trade-off consciously accepted: the _previous expected value_ is overwritten in
 place rather than retained. The hard-cases signal that rule 4 cares about (AI
 draft vs final) is captured separately in `ai_draft` (T5), not in revision
 history, so nothing of eval value is lost. `revision` is the count of human
