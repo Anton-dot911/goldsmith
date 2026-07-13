@@ -3,8 +3,13 @@ import type { DatasetInput, DatasetRow } from "@goldsmith/shared";
 import { CreateDatasetDialog } from "../components/CreateDatasetDialog.tsx";
 import { createDataset, listDatasets } from "../lib/datasets.ts";
 
+interface Props {
+  // Open a dataset's detail page (examples table).
+  onOpen: (dataset: DatasetRow) => void;
+}
+
 // Datasets page: list existing datasets and open the create dialog.
-export function Datasets() {
+export function Datasets({ onOpen }: Props) {
   const [datasets, setDatasets] = useState<DatasetRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -62,7 +67,11 @@ export function Datasets() {
           </thead>
           <tbody>
             {datasets.map((d) => (
-              <tr key={d.id} className="border-b border-slate-100">
+              <tr
+                key={d.id}
+                onClick={() => onOpen(d)}
+                className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
+              >
                 <td className="py-2 pr-4 text-slate-900">{d.title}</td>
                 <td className="py-2 pr-4 font-mono text-slate-600">{d.slug}</td>
                 <td className="py-2 pr-4 text-slate-600">{d.preset}</td>
