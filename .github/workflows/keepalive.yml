@@ -1,0 +1,33 @@
+# Supabase keep-alive. The free tier pauses a project after ~1 week of
+# inactivity; a paused project breaks the app until it is restored. This runs a
+# single cheap REST select every 2 days so the project is never idle long
+# enough to pause. Credentials come from repo secrets (never committed):
+#   SUPABASE_KEEPALIVE_URL — the project URL, e.g. https://<ref>.supabase.co
+#   SUPABASE_KEEPALIVE_KEY — the project's anon (publishable) key
+# workflow_dispatch is kept so it can be pinged by hand after a restore.
+name: keepalive
+
+on:
+  schedule:
+    - cron: "0 6 */2 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: REST select against Supabase
+        env:
+          SUPABASE_KEEPALIVE_URL: ${{ secrets.SUPABASE_KEEPALIVE_URL }}
+          SUPABASE_KEEPALIVE_KEY: ${{ secrets.SUPABASE_KEEPALIVE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_KEEPALIVE_URL" ] || [ -z "$SUPABASE_KEEPALIVE_KEY" ]; then
+            echo "Missing SUPABASE_KEEPALIVE_URL / SUPABASE_KEEPALIVE_KEY secrets"
+            exit 1
+          fi
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "${SUPABASE_KEEPALIVE_URL}/rest/v1/datasets?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_KEEPALIVE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEEPALIVE_KEY}")
+          echo "HTTP $code"
+          test "$code" = "200"

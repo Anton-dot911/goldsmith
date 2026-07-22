@@ -41,3 +41,9 @@ export function ulid(now: number = Date.now()): string {
 export function newExampleId(): string {
   return `ex_${ulid()}`;
 }
+
+// A bare ULID for Storage object names (no "ex_" prefix): the file_ref path
+// convention is storage://goldsmith-inputs/<dataset>/<ulid>.<ext> (T4).
+export function newObjectId(): string {
+  return ulid();
+}

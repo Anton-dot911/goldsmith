@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DatasetRow, ExampleRow } from "@goldsmith/shared";
 import { ExampleDialog } from "../components/ExampleDialog.tsx";
-import { activeExamples } from "../lib/example-model.ts";
+import { activeExamples, isUnlabeled } from "../lib/example-model.ts";
 import { addExample, editExample, listExamples, setExampleActive } from "../lib/examples.ts";
 
 interface Props {
   dataset: DatasetRow;
   onBack: () => void;
+  onLabel: () => void;
+  onImport: () => void;
 }
 
 type ActiveFilter = "all" | "active" | "inactive";
@@ -28,7 +30,7 @@ function formatTime(iso: string): string {
 // Dataset detail: the examples table with filters (active / tag), an active
 // count, and manual add/edit (raw JSON) driving the rule-2 save-gate and the
 // rule-3 revision/deactivate model.
-export function DatasetDetail({ dataset, onBack }: Props) {
+export function DatasetDetail({ dataset, onBack, onLabel, onImport }: Props) {
   const [examples, setExamples] = useState<ExampleRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
@@ -58,6 +60,7 @@ export function DatasetDetail({ dataset, onBack }: Props) {
   }, [examples]);
 
   const activeCount = useMemo(() => activeExamples(examples ?? []).length, [examples]);
+  const unlabeledCount = useMemo(() => (examples ?? []).filter(isUnlabeled).length, [examples]);
 
   const visible = useMemo(() => {
     let rows = examples ?? [];
@@ -107,14 +110,34 @@ export function DatasetDetail({ dataset, onBack }: Props) {
             <span className="font-mono">{dataset.slug}</span> · {dataset.preset} · v
             {dataset.current_version} · <span className="text-slate-700">{activeCount}</span> active
             example{activeCount === 1 ? "" : "s"}
+            {unlabeledCount > 0 && (
+              <>
+                {" · "}
+                <span className="text-amber-700">{unlabeledCount}</span> unlabeled
+              </>
+            )}
           </p>
         </div>
-        <button
-          onClick={() => setDialog({ existing: undefined })}
-          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-        >
-          Add example
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={onImport}
+            className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            Import
+          </button>
+          <button
+            onClick={onLabel}
+            className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            Label
+          </button>
+          <button
+            onClick={() => setDialog({ existing: undefined })}
+            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          >
+            Add example
+          </button>
+        </div>
       </header>
 
       <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
@@ -187,25 +210,42 @@ export function DatasetDetail({ dataset, onBack }: Props) {
                   {inputPreview(ex.input)}
                 </td>
                 <td className="py-2 pr-4 text-slate-600">{ex.tags.join(", ")}</td>
-                <td className="py-2 pr-4 text-slate-600">{ex.provenance}</td>
+                <td className="py-2 pr-4 text-slate-600">
+                  {isUnlabeled(ex) ? (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
+                      unlabeled
+                    </span>
+                  ) : (
+                    ex.provenance
+                  )}
+                </td>
                 <td className="py-2 pr-4 text-slate-600">{ex.revision}</td>
                 <td className="py-2 pr-4 text-slate-600">{ex.active ? "yes" : "no"}</td>
                 <td className="py-2 pr-4 text-slate-500">{formatTime(ex.updated_at)}</td>
                 <td className="py-2 pr-4">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setDialog({ existing: ex })}
-                      className="text-slate-500 hover:text-slate-900"
-                    >
-                      Edit
+                  {isUnlabeled(ex) ? (
+                    // Unlabeled rows are activated only by labeling them (which
+                    // sets a schema-valid expected) — never by a raw reactivate,
+                    // which would push an empty expected into a future export.
+                    <button onClick={onLabel} className="text-slate-500 hover:text-slate-900">
+                      Label
                     </button>
-                    <button
-                      onClick={() => void toggleActive(ex)}
-                      className="text-slate-500 hover:text-slate-900"
-                    >
-                      {ex.active ? "Deactivate" : "Reactivate"}
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setDialog({ existing: ex })}
+                        className="text-slate-500 hover:text-slate-900"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => void toggleActive(ex)}
+                        className="text-slate-500 hover:text-slate-900"
+                      >
+                        {ex.active ? "Deactivate" : "Reactivate"}
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
