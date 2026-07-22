@@ -1,6 +1,9 @@
 import { exampleRowSchema, type ExampleRow } from "@goldsmith/shared";
 import {
+  isUnlabeled,
+  labelUnlabeled,
   newExampleInsert,
+  newUnlabeledInsert,
   reviseExample,
   setActive,
   type ExampleEdit,
@@ -53,6 +56,58 @@ export async function editExample(existing: ExampleRow, edit: ExampleEdit): Prom
       tags: revised.tags,
       revision: revised.revision,
       updated_at: revised.updated_at,
+    })
+    .eq("id", existing.id)
+    .select(COLUMNS)
+    .single();
+  if (error !== null) {
+    throw new Error(error.message);
+  }
+  return exampleRowSchema.parse(data);
+}
+
+// T4 bulk import: create a batch of unlabeled examples (input set, expected
+// null, inactive) in one insert. They form the label queue and are excluded
+// from export until a human labels them (docs/decisions.md T4).
+export async function addUnlabeledExamples(params: {
+  dataset_id: string;
+  version_added: number;
+  inputs: unknown[];
+}): Promise<ExampleRow[]> {
+  if (params.inputs.length === 0) {
+    return [];
+  }
+  const payload = params.inputs.map((input) =>
+    newUnlabeledInsert({
+      dataset_id: params.dataset_id,
+      version_added: params.version_added,
+      input,
+    }),
+  );
+  const { data, error } = await supabase.from("examples").insert(payload).select(COLUMNS);
+  if (error !== null) {
+    throw new Error(error.message);
+  }
+  return exampleRowSchema.array().parse(data);
+}
+
+// The label-page save. An unlabeled example becomes labeled (its first save:
+// active on, revision stays 1); an already-labeled one edits into a new
+// revision (rule 3). Callers pass an `expected` that has already cleared the
+// ajv save-gate (rule 2).
+export async function saveLabel(existing: ExampleRow, edit: ExampleEdit): Promise<ExampleRow> {
+  if (!isUnlabeled(existing)) {
+    return editExample(existing, edit);
+  }
+  const next = labelUnlabeled(existing, edit);
+  const { data, error } = await supabase
+    .from("examples")
+    .update({
+      input: next.input,
+      expected: next.expected,
+      tags: next.tags,
+      active: next.active,
+      updated_at: next.updated_at,
     })
     .eq("id", existing.id)
     .select(COLUMNS)
