@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://goldsmith/spec/export.schema.json",
+  "title": "Goldsmith export line",
+  "description": "One JSONL line of a Goldsmith dataset export. This is a public contract consumed by other repos' eval scripts (DocFlow, Insight, Conveyor). Its shape changes ONLY with a version bump and a note in docs/decisions.md (CLAUDE.md rule 1). One object per line; parse each line with json.loads (see docs/PLAN.md reference reader).",
+  "type": "object",
+  "required": ["id", "input", "expected", "tags", "provenance", "dataset", "dataset_version"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable example id, ULID-based, stable across versions.",
+      "pattern": "^ex_[0-9A-Z]{26}$"
+    },
+    "input": {
+      "type": "object",
+      "description": "Preset-specific input object (e.g. {\"file_ref\": \"storage://...\"} or {\"text\": \"...\"}) or free-form for custom datasets."
+    },
+    "expected": {
+      "type": "object",
+      "description": "The verified expected output, validated against the dataset's own JSON Schema before it was saved."
+    },
+    "tags": {
+      "type": "array",
+      "description": "Free-form slice tags on the example.",
+      "items": { "type": "string" }
+    },
+    "provenance": {
+      "description": "How the expected value was produced.",
+      "enum": ["human_only", "ai_drafted+human_verified"]
+    },
+    "dataset": {
+      "type": "string",
+      "description": "The dataset slug the example belongs to (e.g. \"docflow-invoices\")."
+    },
+    "dataset_version": {
+      "type": "integer",
+      "description": "The dataset version this export was taken at.",
+      "minimum": 1
+    }
+  }
+}

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DatasetRow, ExampleRow } from "@goldsmith/shared";
 import { InputPane } from "../components/InputPane.tsx";
 import { hasPresetForm, PresetForm } from "../components/forms/PresetForm.tsx";
+import { requestDraft } from "../lib/ai-draft.ts";
+import { changedFields } from "../lib/draft-diff.ts";
 import { isUnlabeled } from "../lib/example-model.ts";
 import { listExamples, saveLabel } from "../lib/examples.ts";
 import { firstUnlabeledIndex, nextIndex, orderForLabeling, prevIndex } from "../lib/labeling.ts";
@@ -19,6 +21,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function pretty(value: unknown): string {
   return JSON.stringify(value ?? {}, null, 2);
+}
+
+// Parse raw-mode JSON for the diff baseline; returns {} on a mid-edit parse
+// failure so the badges just show no change rather than throwing.
+function safeParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
 }
 
 function parseTags(raw: string): string[] {
@@ -53,6 +65,13 @@ export function Label({ dataset, onBack }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [schemaErrors, setSchemaErrors] = useState<ReadableError[]>([]);
   const [saving, setSaving] = useState(false);
+  // AI pre-label (T5): the raw draft the model proposed for the CURRENT example,
+  // if any. Set by "Draft with AI" (or seeded from a row already ai_drafted); on
+  // save it flips provenance to "ai_drafted+human_verified" and is stored in
+  // ai_draft, and it drives the corrected-field diff badges (rule 4).
+  const [aiDraft, setAiDraft] = useState<unknown>(null);
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   useEffect(() => {
     listExamples(dataset.id)
@@ -80,6 +99,10 @@ export function Label({ dataset, onBack }: Props) {
     setPrevKey(currentKey);
     setError(null);
     setSchemaErrors([]);
+    setDraftError(null);
+    // Seed the diff baseline from a row already drafted-and-verified; a fresh
+    // "Draft with AI" click overwrites it. Unlabeled/human_only rows start null.
+    setAiDraft(current.ai_draft ?? null);
     setInputValue(current.input ?? {});
     const unlabeled = isUnlabeled(current);
     setExpectedValue(
@@ -128,10 +151,18 @@ export function Label({ dataset, onBack }: Props) {
 
     setSaving(true);
     try {
+      // Rule 4: a value that started as an AI draft is saved as
+      // "ai_drafted+human_verified" with the raw draft retained; the human save
+      // here is the required confirmation (the AI never auto-confirms).
+      const aiFields =
+        aiDraft !== null
+          ? { provenance: "ai_drafted+human_verified" as const, ai_draft: aiDraft }
+          : {};
       const saved = await saveLabel(current, {
         input: inputValue,
         expected,
         tags: parseTags(tagsText),
+        ...aiFields,
       });
       // Update the row in place (keeps its queue position) and advance.
       setQueue((prev) => (prev ?? []).map((r) => (r.id === saved.id ? saved : r)));
@@ -151,7 +182,47 @@ export function Label({ dataset, onBack }: Props) {
     inputValue,
     tagsText,
     total,
+    aiDraft,
   ]);
+
+  // "Draft with AI": ask the server to propose an `expected` for the current
+  // input, then fill the form with it. It is never saved automatically — the
+  // human still edits and saves (rule 4). The raw draft is kept in `aiDraft` so
+  // the save records provenance + the AI-vs-final diff.
+  const draftWithAI = useCallback(async () => {
+    if (current === null || drafting) {
+      return;
+    }
+    setDraftError(null);
+    setDrafting(true);
+    try {
+      const { draft } = await requestDraft(dataset.id, inputValue);
+      setAiDraft(draft);
+      if (isPlainObject(draft) && hasPresetForm(preset)) {
+        setExpectedValue(draft);
+        setRawMode(false);
+      } else {
+        setRawMode(true);
+      }
+      setExpectedText(pretty(draft));
+      setError(null);
+      setSchemaErrors([]);
+    } catch (cause) {
+      setDraftError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setDrafting(false);
+    }
+  }, [current, drafting, dataset.id, inputValue, preset]);
+
+  // Top-level fields the human changed from the AI draft — the hard-cases
+  // signal, surfaced as subtle badges while labeling.
+  const correctedFields = useMemo(() => {
+    if (aiDraft === null) {
+      return [];
+    }
+    const effective = rawMode ? safeParse(expectedText) : expectedValue;
+    return changedFields(aiDraft, effective);
+  }, [aiDraft, rawMode, expectedText, expectedValue]);
 
   // Keyboard flow. ⌘/Ctrl+Enter is the primary save-and-next; the arrows
   // navigate. Ignored while focus is in a text field for the arrows so caret
@@ -255,16 +326,57 @@ export function Label({ dataset, onBack }: Props) {
               <span className="text-sm font-medium text-slate-700">
                 Expected <span className="font-normal text-slate-400">(validated on save)</span>
               </span>
-              {hasPresetForm(preset) && (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={rawMode ? switchToForm : switchToRaw}
-                  className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                  onClick={() => void draftWithAI()}
+                  disabled={drafting}
+                  className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                  title="Ask Claude to propose the expected output — you verify before saving"
                 >
-                  {rawMode ? "Edit as form" : "Raw JSON"}
+                  {drafting ? "Drafting…" : "✨ Draft with AI"}
                 </button>
-              )}
+                {hasPresetForm(preset) && (
+                  <button
+                    type="button"
+                    onClick={rawMode ? switchToForm : switchToRaw}
+                    className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                  >
+                    {rawMode ? "Edit as form" : "Raw JSON"}
+                  </button>
+                )}
+              </div>
             </div>
+
+            {draftError !== null && (
+              <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">
+                AI draft failed: {draftError}
+              </p>
+            )}
+
+            {aiDraft !== null && (
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="rounded bg-violet-100 px-1.5 py-0.5 font-medium text-violet-700">
+                  AI-drafted
+                </span>
+                {correctedFields.length === 0 ? (
+                  <span className="text-slate-400">no corrections yet</span>
+                ) : (
+                  <>
+                    <span className="text-slate-500">corrected:</span>
+                    {correctedFields.map((f) => (
+                      <span
+                        key={f}
+                        className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-amber-800"
+                        title="You changed this field from the AI draft — a hard-cases signal"
+                      >
+                        {f}
+                      </span>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
 
             {rawMode ? (
               <textarea

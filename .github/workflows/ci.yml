@@ -47,3 +47,18 @@ jobs:
       - run: pnpm --filter ./web typecheck
       - run: pnpm --filter ./web test
       - run: pnpm --filter ./web build
+
+  functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm --filter ./netlify/functions typecheck
+      # The @llm smoke and live-DB tests are opt-in (env-gated), so this run
+      # stays offline: mocked ai-draft unit tests + the export contract test.
+      - run: pnpm --filter ./netlify/functions test

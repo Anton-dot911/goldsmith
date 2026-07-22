@@ -4,6 +4,9 @@
 # enough to pause. Credentials come from repo secrets (never committed):
 #   SUPABASE_KEEPALIVE_URL — the project URL, e.g. https://<ref>.supabase.co
 #   SUPABASE_KEEPALIVE_KEY — the project's anon (publishable) key
+# It selects the `public.keepalive` view (migration 003): a constant view the
+# anon role may read, so the ping still warms the DB after the goldsmith tables
+# became authenticated-only — without exposing any data to the anon key.
 # workflow_dispatch is kept so it can be pinged by hand after a restore.
 name: keepalive
 
@@ -26,7 +29,7 @@ jobs:
             exit 1
           fi
           code=$(curl -sS -o /dev/null -w "%{http_code}" \
-            "${SUPABASE_KEEPALIVE_URL}/rest/v1/datasets?select=id&limit=1" \
+            "${SUPABASE_KEEPALIVE_URL}/rest/v1/keepalive?select=ok&limit=1" \
             -H "apikey: ${SUPABASE_KEEPALIVE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_KEEPALIVE_KEY}")
           echo "HTTP $code"
