@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { DatasetRow, ExampleRow } from "@goldsmith/shared";
 import { validateExpected, type ReadableError } from "../lib/validate.ts";
+import { seedExpected, type JsonSchema } from "../lib/preset-form.ts";
+import { hasPresetForm, PresetForm } from "./forms/PresetForm.tsx";
 
 interface ExampleValues {
   input: unknown;
@@ -20,6 +22,10 @@ function pretty(value: unknown): string {
   return JSON.stringify(value ?? {}, null, 2);
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 // Split a comma/newline separated tag string into a clean, de-duped list.
 function parseTags(raw: string): string[] {
   const seen = new Set<string>();
@@ -32,18 +38,37 @@ function parseTags(raw: string): string[] {
   return [...seen];
 }
 
-// Manual add/edit form: raw-JSON textareas for input and expected plus a tags
-// field. `expected` is validated against the dataset's JSON Schema on save
-// (rule 2); invalid expected blocks the save and the errors render as a
-// readable list (path + message), never a JSON dump. Preset form renderers
-// arrive in T3 — this is the raw-JSON path.
+// Manual add/edit form. `expected` is edited through the preset form renderer
+// (T3) by default, with a "raw JSON" escape hatch that stays for the `custom`
+// preset and any expected value the form can't represent. Both modes feed the
+// same ajv save-gate (rule 2) with the same `expected` object — one validation
+// path, no divergence. `input` remains a raw-JSON field (two-pane/file inputs
+// arrive in T4); the routing/qa forms read its `question` as context.
 export function ExampleDialog({ dataset, existing, onCancel, onSave }: Props) {
+  const preset = dataset.preset;
+
+  const initialExpected: Record<string, unknown> = useMemo(() => {
+    if (existing === undefined) {
+      return seedExpected(preset);
+    }
+    return isPlainObject(existing.expected) ? existing.expected : {};
+  }, [existing, preset]);
+
   const [inputText, setInputText] = useState(() =>
     existing === undefined ? "{}" : pretty(existing.input),
   );
+  // The structured `expected` for form mode; the single source of truth the
+  // gate validates when not in raw mode.
+  const [expectedValue, setExpectedValue] = useState<Record<string, unknown>>(initialExpected);
+  // Raw-JSON text, used only while in raw mode. `custom`, and any existing value
+  // that isn't a plain object, open in raw mode; the presets open in form mode.
+  const rawByDefault =
+    !hasPresetForm(preset) || (existing !== undefined && !isPlainObject(existing.expected));
+  const [rawMode, setRawMode] = useState(rawByDefault);
   const [expectedText, setExpectedText] = useState(() =>
-    existing === undefined ? "{}" : pretty(existing.expected),
+    existing === undefined ? pretty(seedExpected(preset)) : pretty(existing.expected),
   );
+
   const [tagsText, setTagsText] = useState(() =>
     existing === undefined ? "" : existing.tags.join(", "),
   );
@@ -52,6 +77,41 @@ export function ExampleDialog({ dataset, existing, onCancel, onSave }: Props) {
   const [error, setError] = useState<string | null>(null);
   // The ajv save-gate failures for `expected`, rendered as a readable list.
   const [schemaErrors, setSchemaErrors] = useState<ReadableError[]>([]);
+
+  // Parsed `input` for the routing/qa question context; undefined while the raw
+  // input is mid-edit and unparseable.
+  const parsedInput = useMemo<unknown>(() => {
+    try {
+      return JSON.parse(inputText);
+    } catch {
+      return undefined;
+    }
+  }, [inputText]);
+
+  function switchToRaw() {
+    setError(null);
+    setSchemaErrors([]);
+    setExpectedText(pretty(expectedValue));
+    setRawMode(true);
+  }
+
+  function switchToForm() {
+    setError(null);
+    setSchemaErrors([]);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(expectedText);
+    } catch (cause) {
+      setError(`Expected is not valid JSON: ${(cause as Error).message}`);
+      return;
+    }
+    if (!isPlainObject(parsed)) {
+      setError("Expected must be a JSON object to edit as a form.");
+      return;
+    }
+    setExpectedValue(parsed);
+    setRawMode(false);
+  }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -66,12 +126,17 @@ export function ExampleDialog({ dataset, existing, onCancel, onSave }: Props) {
       return;
     }
 
+    // Both modes produce one `expected` object; the gate is the same either way.
     let expected: unknown;
-    try {
-      expected = JSON.parse(expectedText);
-    } catch (cause) {
-      setError(`Expected is not valid JSON: ${(cause as Error).message}`);
-      return;
+    if (rawMode) {
+      try {
+        expected = JSON.parse(expectedText);
+      } catch (cause) {
+        setError(`Expected is not valid JSON: ${(cause as Error).message}`);
+        return;
+      }
+    } else {
+      expected = expectedValue;
     }
 
     // Rule 2: the save-gate. Invalid expected cannot be saved.
@@ -115,20 +180,45 @@ export function ExampleDialog({ dataset, existing, onCancel, onSave }: Props) {
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-slate-700">
-            Expected (JSON){" "}
-            <span className="font-normal text-slate-400">
-              (validated against the dataset schema on save)
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-700">
+              Expected{" "}
+              <span className="font-normal text-slate-400">
+                (validated against the dataset schema on save)
+              </span>
             </span>
-          </span>
-          <textarea
-            className="h-40 rounded border border-slate-300 px-3 py-2 font-mono text-xs"
-            value={expectedText}
-            onChange={(e) => setExpectedText(e.target.value)}
-            spellCheck={false}
-          />
-        </label>
+            {hasPresetForm(preset) && (
+              <button
+                type="button"
+                onClick={rawMode ? switchToForm : switchToRaw}
+                className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+              >
+                {rawMode ? "Edit as form" : "Raw JSON"}
+              </button>
+            )}
+          </div>
+
+          {rawMode ? (
+            <textarea
+              className="h-40 rounded border border-slate-300 px-3 py-2 font-mono text-xs"
+              value={expectedText}
+              onChange={(e) => setExpectedText(e.target.value)}
+              spellCheck={false}
+              aria-label="Expected (JSON)"
+            />
+          ) : (
+            <div className="rounded border border-slate-200 p-3">
+              <PresetForm
+                preset={preset}
+                schema={dataset.json_schema as JsonSchema}
+                input={parsedInput}
+                value={expectedValue}
+                onChange={setExpectedValue}
+              />
+            </div>
+          )}
+        </div>
 
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-slate-700">
