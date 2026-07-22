@@ -55,6 +55,8 @@ export async function editExample(existing: ExampleRow, edit: ExampleEdit): Prom
       expected: revised.expected,
       tags: revised.tags,
       revision: revised.revision,
+      provenance: revised.provenance,
+      ai_draft: revised.ai_draft,
       updated_at: revised.updated_at,
     })
     .eq("id", existing.id)
@@ -107,6 +109,8 @@ export async function saveLabel(existing: ExampleRow, edit: ExampleEdit): Promis
       expected: next.expected,
       tags: next.tags,
       active: next.active,
+      provenance: next.provenance,
+      ai_draft: next.ai_draft,
       updated_at: next.updated_at,
     })
     .eq("id", existing.id)

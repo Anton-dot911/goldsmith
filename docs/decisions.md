@@ -248,3 +248,142 @@ not a rule for this generated repo.
 node`: Storage multipart uploads and signed-URL fetches hang under the suite's
 default jsdom networking. It stays opt-in (`GOLDSMITH_INTEGRATION=1`) so the
 default `pnpm test` and CI remain offline and green.
+
+---
+
+## T5 — AI pre-label + export (2026-07-22)
+
+### Export contract — `spec/export.schema.json` first defined here (rule 1)
+
+The export line format existed only as prose in `docs/PLAN.md`; T5 promotes it to
+the machine-checkable contract `spec/export.schema.json` (draft-07), the public
+shape other repos' eval scripts read. It is **verbatim** the PLAN.md shape —
+`{id, input, expected, tags, provenance, dataset, dataset_version}`, all seven
+required, `additionalProperties:false`, `provenance` enum, `dataset` = the slug,
+`dataset_version` = the exported version, `id` matching `^ex_[0-9A-Z]{26}$`. This
+is its first definition; per rule 1 any future change needs a version bump + a
+note here. The contract test (`netlify/functions/tests/export.test.ts`) validates
+every assembled line against this schema **and** parses the JSONL with the exact
+Python reference reader from PLAN.md via `python3`, so both the schema and the
+copied reader snippet are exercised.
+
+### Export selection semantics: `active && version_added <= version`
+
+"Export takes active examples of the chosen version." Implemented at the assembly
+boundary (`lib/export-line.ts`): a line is emitted when `active` is true **and**
+`version_added <= version`. `active` excludes both deactivated rows and the
+unlabeled import queue (`active=false`); `version_added <= version` means an
+example added at v2 belongs to v2, v3, … until deactivated — which is what keeps a
+frozen version's export stable while new examples land in later versions (the T6
+property, satisfied here at the export layer without T6's freeze UI). Each line's
+`dataset_version` is the **requested** export version, not the row's
+`version_added`.
+
+### `ai-draft` function structure: pure core + injected deps
+
+The metered pre-label call is split so it unit-tests without network: the pure
+core `lib/draft.ts` (`draftExpected`) takes a `DraftDeps` (load schema, load
+prompt, fetch file, call model, meter), and `lib/deps.ts` wires the real
+Anthropic + Supabase clients. Mocked-LLM tests drive the core with fakes (schema
+wiring, metering, file-vs-text branch, error path); the `@llm` smoke drives it
+with real clients. Draft = the `tool_use` input of a single forced tool
+`record_expected` whose `input_schema` **is** the dataset's JSON Schema
+(structured output). The function never writes the example — a human save is
+always required (rule 4).
+
+### Draft model: default Haiku 4.5, `DRAFT_MODEL`-overridable, conditional temperature
+
+Default `claude-haiku-4-5-20251001` — the model the shared meter-dev project
+already standardized on (`llm_calls`), cheap (≈$0.0027/draft observed), and — key
+point — it still accepts `temperature`, which the T5 contract fixes at **0**. The
+newer high-vision tiers (Opus 4.7/4.8, Sonnet 5, Fable 5) **reject** sampling
+params with a 400, so `lib/anthropic.ts` sends `temperature:0` only on the models
+that accept it (Haiku 4.5, Sonnet 4.6, Opus 4.6) and omits it on the newer ones —
+which keeps `DRAFT_MODEL` swappable to a stronger model without a 400. Empirically
+Haiku drafts **text** invoices near-perfectly; the sample **PDF** (RahunokFopPDF)
+is a genuine hard case — Sonnet 4.6 also returned `<UNKNOWN>`/`0` on it — so the
+draft supplies structure and the human-correction diff is captured as the
+hard-cases signal, which is the point.
+
+### Metering: `llm_calls` row per call, `ts` set client-side, non-fatal
+
+Every draft records one `llm_calls` row (`project:"goldsmith"`,
+`component:"draft_<preset>"`) with tokens, `cost_usd` (from a per-model price
+table; null for an unpriced model), latency, status, and `request_id` — via the
+service-role key server-side (the table is owner-only RLS; the browser anon key
+gets a 401, as asserted in the T1 integration test). The shared schema's `ts`
+column is NOT NULL with no default, so the meter sets it explicitly. A metering
+insert failure is logged, never thrown — it must not sink a draft already
+produced and paid for.
+
+### File inputs: fetched server-side, passed as document/image
+
+For an extraction dataset whose input is `{"file_ref": "storage://..."}`, the
+function signs a short-lived URL with the service key, fetches the bytes
+server-side, and passes them to Claude as a `document` block (PDF) or `image`
+block (png/jpg/…). The browser never needs the file for drafting.
+
+### "Draft with AI" UI + the hard-cases diff (rule 4)
+
+The Label page's "✨ Draft with AI" button POSTs `{dataset_id, input}` to the
+function, fills the expected form with the draft, and keeps the raw draft in
+component state. On save, provenance flips to `ai_drafted+human_verified` and the
+raw draft is stored in `ai_draft`; the human save is mandatory (the AI never
+auto-confirms). `web/src/lib/draft-diff.ts` (`changedFields`) computes which
+top-level fields the human changed from the draft, rendered as subtle amber
+badges — the hard-cases signal. `example-model.ts` carries the optional
+`provenance`/`ai_draft` on an edit and defaults them to the existing values, so a
+plain human edit never disturbs provenance and a re-edit of an ai-drafted example
+keeps its mark.
+
+### Acceptance run (DoD)
+
+10 inputs (5 text + 5 sample PDFs), each drafted → corrected → saved. Measured:
+AI draft avg **2.06 s/ex**, cost avg **$0.0027/ex**; with a conservative human
+verify/correct model (text 25 s, PDF 75 s) the run projects to **~35 min for 40
+examples — well under the 2 h DoD**. Text drafts needed 1–2 field corrections;
+the hard PDFs needed 3–5. Full table in the T5 DoD report.
+
+---
+
+## T5.5 — Auth + deploy readiness (2026-07-22)
+
+### Magic-link auth gate
+
+Supabase Auth `signInWithOtp` (email magic link). `App.tsx` resolves the session
+on load and subscribes to `onAuthStateChange`: no session → `Login` screen; session
+→ the app with a slim account bar (email + Sign out). supabase-js persists the
+session and (with `detectSessionInUrl`, default on) consumes the magic-link tokens
+from the URL hash on the click-through. Still single-user, no roles (rule 7) —
+login only gates access and supplies an `authenticated` JWT for RLS.
+
+### Migration 003 — authenticated-only RLS (deviation flagged, applied out-of-band)
+
+`003_auth_rls.sql` drops the permissive `goldsmith_all` policies and recreates
+them `to authenticated`, and moves the `goldsmith-inputs` storage policies from
+anon to authenticated. Like 001/002 this is DDL against the shared meter-dev
+project; it was **output for approval and applied out of session** (the pause-for-
+"applied" workflow), never silently. Signed-URL previews keep working after the
+change (a signed token authorizes the object directly, no anon policy needed), and
+the ai-draft function reads files with the service role key.
+
+### Keepalive after authenticated-only RLS: a constant view
+
+The keepalive workflow pings the DB every 2 days with the **anon** key so the
+free-tier project never idles into a pause. Once `datasets` became authenticated-
+only, that ping could no longer read it. Rather than punch an anon hole in a real
+table, 003 adds `create view public.keepalive as select true as ok` with
+`grant select ... to anon` — a constant view that touches no goldsmith data, so
+the ping still warms the DB without leaking anything. `keepalive.yml` now selects
+`/rest/v1/keepalive` instead of `/rest/v1/datasets`.
+
+### Deploy readiness
+
+Root `.env.example` documents every deploy var, split build-time (browser, anon
+key) vs runtime (functions-only secrets: `ANTHROPIC_API_KEY`, `EXPORT_TOKEN`,
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, optional `DRAFT_MODEL`).
+`netlify.toml` declares the esbuild functions bundler and
+`included_files = ["prompts/**"]` so the draft prompts ship with the function.
+`README.md` gains a "Deploy" section with the exact Netlify steps. The functions
+package (`@goldsmith/functions`) is a new workspace member with its own CI job
+(typecheck + offline tests).

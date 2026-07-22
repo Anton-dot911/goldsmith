@@ -1,4 +1,4 @@
-import type { ExampleRow } from "@goldsmith/shared";
+import type { ExampleRow, Provenance } from "@goldsmith/shared";
 import { newExampleId } from "./ulid.ts";
 
 // Pure business rules for examples, kept out of the Supabase data layer so the
@@ -104,6 +104,23 @@ export interface ExampleEdit {
   input: unknown;
   expected: unknown;
   tags: string[];
+  // Set by the AI pre-label flow (T5, rule 4): when a human saves a value that
+  // started as an AI draft, provenance flips to "ai_drafted+human_verified" and
+  // the raw draft is retained in `ai_draft` so the AI-vs-final diff (the
+  // hard-cases signal) is recoverable. Omitted for plain human edits, which
+  // preserve the existing provenance / ai_draft.
+  provenance?: Provenance;
+  ai_draft?: unknown;
+}
+
+// The provenance/ai_draft an edit applies, defaulting to the row's existing
+// values so a plain human edit never touches them (rule 4: a human save is
+// always required; the AI path only ever *adds* the drafted+verified mark).
+function provenanceFor(existing: ExampleRow, edit: ExampleEdit): Provenance {
+  return edit.provenance ?? existing.provenance;
+}
+function aiDraftFor(existing: ExampleRow, edit: ExampleEdit): unknown {
+  return edit.ai_draft !== undefined ? edit.ai_draft : existing.ai_draft;
 }
 
 // Labeling an unlabeled example: its FIRST real save. Sets the human-entered
@@ -123,6 +140,8 @@ export function labelUnlabeled(
     expected: edit.expected,
     tags: edit.tags,
     active: true,
+    provenance: provenanceFor(existing, edit),
+    ai_draft: aiDraftFor(existing, edit),
     updated_at: now.toISOString(),
   };
 }
@@ -142,6 +161,8 @@ export function reviseExample(
     expected: edit.expected,
     tags: edit.tags,
     revision: existing.revision + 1,
+    provenance: provenanceFor(existing, edit),
+    ai_draft: aiDraftFor(existing, edit),
     updated_at: now.toISOString(),
   };
 }

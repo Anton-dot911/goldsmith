@@ -1,7 +1,17 @@
 # Netlify deploy config. The web/ package is the Vite app; netlify/functions/
-# holds the server-side AI pre-label call (added in T5) — the only backend
-# code, so the API key stays off the browser. Datasets CRUD talks to Supabase
-# directly from the browser with the anon key (RLS confines it).
+# holds the server-side code (the AI pre-label call and the CI export endpoint)
+# — the only backend, so the API key and export token stay off the browser.
+# Datasets/examples CRUD talks to Supabase directly from the browser with the
+# anon key, behind Supabase Auth (magic-link) + authenticated-only RLS.
+#
+# Required environment variables (set in the Netlify UI → Site settings →
+# Environment variables; documented in .env.example):
+#   Build-time (Vite, exposed to the browser — safe, anon key only):
+#     VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+#   Runtime (functions only, server-side secrets — never exposed):
+#     ANTHROPIC_API_KEY, EXPORT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+#     DRAFT_MODEL (optional — overrides the default draft model)
+
 [build]
   command = "pnpm install --no-frozen-lockfile && pnpm --filter ./web build"
   publish = "web/dist"
@@ -10,7 +20,14 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# SPA fallback so client-side routes resolve to the app shell.
+# Ship the per-preset draft prompts (prompts/draft_<preset>.v1.md) alongside the
+# bundled functions so ai-draft can read them at runtime.
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["prompts/**"]
+
+# SPA fallback so client-side routes resolve to the app shell. Function routes
+# (/.netlify/functions/*) are matched by Netlify before this catch-all.
 [[redirects]]
   from = "/*"
   to = "/index.html"

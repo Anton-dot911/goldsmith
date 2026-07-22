@@ -3,6 +3,7 @@ import type { DatasetRow, ExampleRow } from "@goldsmith/shared";
 import { ExampleDialog } from "../components/ExampleDialog.tsx";
 import { activeExamples, isUnlabeled } from "../lib/example-model.ts";
 import { addExample, editExample, listExamples, setExampleActive } from "../lib/examples.ts";
+import { buildExportLines, downloadJsonl, toJsonl } from "../lib/export.ts";
 
 interface Props {
   dataset: DatasetRow;
@@ -97,6 +98,12 @@ export function DatasetDetail({ dataset, onBack, onLabel, onImport }: Props) {
     setExamples((prev) => (prev ?? []).map((r) => (r.id === updated.id ? updated : r)));
   }
 
+  function exportJsonl() {
+    const version = dataset.current_version;
+    const lines = buildExportLines(dataset, examples ?? [], version);
+    downloadJsonl(`${dataset.slug}.v${version}.jsonl`, toJsonl(lines));
+  }
+
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-6 py-10">
       <button onClick={onBack} className="mb-4 text-sm text-slate-500 hover:text-slate-800">
@@ -119,6 +126,14 @@ export function DatasetDetail({ dataset, onBack, onLabel, onImport }: Props) {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={exportJsonl}
+            disabled={activeCount === 0}
+            className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+            title={`Download the ${activeCount} active example(s) of v${dataset.current_version} as JSONL`}
+          >
+            Export .jsonl
+          </button>
           <button
             onClick={onImport}
             className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"

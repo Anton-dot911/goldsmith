@@ -85,25 +85,26 @@ Implementation: dataset schema + preset-specific prompt (`prompts/draft_<preset>
 
 ## Tasks
 
-**T1. Scaffold + schema.**
+**T1. Scaffold + schema.** ✅ (#1)
 Generate from ts-fullstack (adapt to Netlify functions), apply migration, datasets CRUD page (create with preset pick + schema paste/preset default).
 DoD: create dataset of each preset; schema stored; lint/tests green.
 
-**T2. Examples core + validation.**
+**T2. Examples core + validation.** ✅ (#2)
 Examples table page, manual add form (raw JSON for now), ajv validation on save (rule 2), revisions + deactivate (rule 3), ulid ids, tags.
 DoD: invalid expected rejected with readable errors; edit creates revision; unit tests for validation and revisioning.
 
-**T3. Preset form renderers.**
+**T3. Preset form renderers.** ✅ (#3)
 Custom renderers for the four presets (schema-driven fields, enum selects, arrays for routing); fallback raw JSON editor for `custom`.
 DoD: component tests: value round-trip per preset; labeling an example without touching raw JSON.
 
-**T4. Two-pane labeling + file inputs.**
+**T4. Two-pane labeling + file inputs.** ✅ (#4)
 Label page: left input (text render or file preview via Storage — pdf/image), right expected form; keyboard next/prev; upload inputs (single + bulk file drop); CSV/JSONL bulk import of inputs.
 DoD: label 10 fixture examples fluidly; bulk import creates unlabeled examples queue.
 
-**T5. AI pre-label + export.**
+**T5. AI pre-label + export.** ✅ (+ T5.5 auth + deploy readiness)
 `ai-draft` function + "Draft with AI" button (fills form, marks provenance, stores ai_draft); export download + CI endpoint; contract test with reference reader.
-DoD: drafted-then-corrected example stores diff; exported file passes `export.schema.json` for every line; DocFlow-shaped dataset (40 examples) built as acceptance run — timed, target ≤ 2h.
+DoD: drafted-then-corrected example stores diff; exported file passes `export.schema.json` for every line; DocFlow-shaped dataset (40 examples) built as acceptance run — timed, target ≤ 2h. **Met: acceptance run projects ~35 min for 40 (see docs/decisions.md T5).**
+T5.5: Supabase Auth magic-link login + authenticated-only RLS (migration 003); netlify.toml finalized, .env.example + README Deploy.
 
 **T6. Versioning UX.**
 Freeze version (snapshot note), bump current, export by version; version badge on examples.
