@@ -28,6 +28,12 @@ def load_golden(path):
         return [json.loads(line) for line in f if line.strip()]
 ```
 
+> `spec/export.schema.json` is the canonical, machine-checkable form of this
+> shape (added in T5); the contract test validates every export line against it
+> AND parses it with the reader above. Per hard rule 1 it changes only with a
+> version bump and a note in `docs/decisions.md` — the jsonc above is
+> illustrative, the schema file is authoritative.
+
 ### Input conventions per preset
 - `extraction`: `{"file_ref": "storage://.../doc.pdf"}` or `{"text": "..."}`; expected = target Pydantic-mirrored schema (e.g. DocFlow InvoiceData JSON Schema pasted at dataset creation)
 - `routing`: `{"question": "..."}`; expected = `{"routes": ["sql"], "clarify_ok": false}`
@@ -72,6 +78,14 @@ create table dataset_versions (
 );
 ```
 
+> This is the initial `001_init.sql` contract (tables only). The migrations that
+> followed are `002_storage_inputs.sql` (private `goldsmith-inputs` bucket +
+> storage RLS) and `003_auth_rls.sql` (authenticated-only RLS on the three tables
+> and the bucket, plus the `public.keepalive` view) — see `supabase/migrations/`
+> and `docs/decisions.md`. Per `docs/LESSONS.md` rule 7 the agent never applies
+> DDL: it outputs the full SQL and I run it in the Supabase SQL Editor, then it
+> verifies via REST.
+
 ### AI draft function
 `POST /.netlify/functions/ai-draft` body `{dataset_id, input}` →
 `{draft: <expected-shaped object>, model, cost_usd}`.
@@ -86,7 +100,7 @@ Implementation: dataset schema + preset-specific prompt (`prompts/draft_<preset>
 ## Tasks
 
 **T1. Scaffold + schema.** ✅ (#1)
-Generate from ts-fullstack (adapt to Netlify functions), apply migration, datasets CRUD page (create with preset pick + schema paste/preset default).
+Generate from ts-fullstack (adapt to Netlify functions), output the init migration SQL for me to apply (LESSONS rule 7 — the agent never applies DDL), datasets CRUD page (create with preset pick + schema paste/preset default).
 DoD: create dataset of each preset; schema stored; lint/tests green.
 
 **T2. Examples core + validation.** ✅ (#2)
@@ -117,4 +131,6 @@ DoD: mismatches list renders; one-click correction works; used once on a real Do
 ---
 
 ## Session prompt template
-> Read CLAUDE.md and docs/PLAN.md. Implement task T<N> only. Contracts are verbatim — ask before deviating. Finish with tests green and a short summary.
+> Read CLAUDE.md, docs/LESSONS.md, and docs/PLAN.md. Implement task T<N> only. Contracts are verbatim — ask before deviating. Finish with tests green and a short summary.
+>
+> Required DoD line for every task: **update CLAUDE.md "Current state" to match merged reality** (file tree, functions, auth/RLS shape) — the INVARIANTS stay put; only the point-in-time section moves.
