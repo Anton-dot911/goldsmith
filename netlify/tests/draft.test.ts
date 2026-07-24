@@ -7,7 +7,7 @@ import {
   type FileContent,
   type MeterRecord,
   type ModelResult,
-} from "../lib/draft.ts";
+} from "../functions/lib/draft.ts";
 
 // Mocked-LLM unit tests for the AI pre-label core. No network: a fake DraftDeps
 // records what draftExpected wired together (schema, prompt, file) and returns a

@@ -3,9 +3,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { draftExpected } from "../lib/draft.ts";
-import { makeRealDeps } from "../lib/deps.ts";
-import { makeAdmin } from "../lib/supabase-admin.ts";
+import { draftExpected } from "../functions/lib/draft.ts";
+import { makeRealDeps } from "../functions/lib/deps.ts";
+import { makeAdmin } from "../functions/lib/supabase-admin.ts";
 
 // Acceptance run (TZ Definition of Done): time a realistic labeling pass over 10
 // inputs (a mix of the sample template PDFs and text), draft each with AI,

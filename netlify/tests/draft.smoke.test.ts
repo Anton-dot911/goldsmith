@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { draftExpected } from "../lib/draft.ts";
-import { makeRealDeps } from "../lib/deps.ts";
-import { makeAdmin } from "../lib/supabase-admin.ts";
+import { draftExpected } from "../functions/lib/draft.ts";
+import { makeRealDeps } from "../functions/lib/deps.ts";
+import { makeAdmin } from "../functions/lib/supabase-admin.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // @llm real-model smoke: one text input and one uploaded-PDF (RahunokFopPDF)

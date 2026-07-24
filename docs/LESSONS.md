@@ -97,9 +97,18 @@ default, not a human instruction.
     exists — if REST suddenly 502s, suspect pause first, egress second.
 17. Browser auto-dark-mode inverts light UIs: manage color-scheme
     explicitly; scanned-document panes always render as light paper.
+18. Netlify bundles EVERY top-level file in the functions directory as a
+    serverless function — a stray `vitest.config.ts`, `package.json`, or
+    `tsconfig.json` there fails the deploy ("change the function names to
+    contain only alphanumeric characters, hyphens or underscores", because
+    `vitest.config` has a `.`). Keep the functions dir to entrypoints +
+    `lib/` only; put the workspace's config/tests one level up (e.g.
+    `netlify/` while functions stay in `netlify/functions/`).
+    _(Incident: goldsmith Netlify deploy failed at Functions bundling on
+    `vitest.config`.)_
 
 ## Cost awareness
 
-18. Every LLM call goes through the metered client with a meaningful
+19. Every LLM call goes through the metered client with a meaningful
     component name; cheap tasks (classification, drafting) default to the
     small model via env var, never hardcoded.

@@ -11,7 +11,7 @@ import {
   selectForExport,
   toJsonl,
   type ExampleForExport,
-} from "../lib/export-line.ts";
+} from "../functions/lib/export-line.ts";
 
 // The export contract test (CLAUDE.md testing conventions): a fixture dataset ->
 // export -> every line validates against spec/export.schema.json AND parses with

@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 
 // `@spec` resolves to the repo-root `spec/` dir so the export-contract test
 // imports the same export.schema.json the app and consumers rely on.
-const specDir = fileURLToPath(new URL("../../spec", import.meta.url));
+const specDir = fileURLToPath(new URL("../spec", import.meta.url));
 
 export default defineConfig({
   resolve: {

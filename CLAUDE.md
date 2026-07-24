@@ -81,10 +81,13 @@ web/src/
   components/forms/ # preset renderers: extraction | routing | qa | classification
   lib/              # schema.ts (ajv + preset registry), validate, examples, datasets,
                     # storage, file-ref, ai-draft (client), draft-diff, export, auth, supabase
-netlify/functions/  # own workspace package (@goldsmith/functions)
-  ai-draft.ts       # POST {dataset_id, input} -> {draft, model, cost_usd} (metered)
-  export.ts         # GET CI export (EXPORT_TOKEN bearer) -> jsonl
-  lib/              # draft (pure core + deps), anthropic, supabase-admin, export-line, prices, prompts
+netlify/             # the @goldsmith/functions workspace (package.json + config here)
+  functions/         # ONLY the two entrypoints + lib/ — Netlify bundles every
+                     # top-level file here as a serverless function
+    ai-draft.ts      # POST {dataset_id, input} -> {draft, model, cost_usd} (metered)
+    export.ts        # GET CI export (EXPORT_TOKEN bearer) -> jsonl
+    lib/             # draft (pure core + deps), anthropic, supabase-admin, export-line, prices, prompts
+  tests/             # vitest suites; vitest.config.ts + tsconfig.json alongside
 prompts/            # draft_<preset>.v1.md — per-preset draft prompts, shipped with the functions
 spec/
   export.schema.json
