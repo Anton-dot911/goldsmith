@@ -262,7 +262,7 @@ shape other repos' eval scripts read. It is **verbatim** the PLAN.md shape —
 required, `additionalProperties:false`, `provenance` enum, `dataset` = the slug,
 `dataset_version` = the exported version, `id` matching `^ex_[0-9A-Z]{26}$`. This
 is its first definition; per rule 1 any future change needs a version bump + a
-note here. The contract test (`netlify/functions/tests/export.test.ts`) validates
+note here. The contract test (`netlify/tests/export.test.ts`) validates
 every assembled line against this schema **and** parses the JSONL with the exact
 Python reference reader from PLAN.md via `python3`, so both the schema and the
 copied reader snippet are exercised.
@@ -387,3 +387,58 @@ key) vs runtime (functions-only secrets: `ANTHROPIC_API_KEY`, `EXPORT_TOKEN`,
 `README.md` gains a "Deploy" section with the exact Netlify steps. The functions
 package (`@goldsmith/functions`) is a new workspace member with its own CI job
 (typecheck + offline tests).
+
+---
+
+## Functions-bundling fix — config/tests moved out of `netlify/functions/` (2026-07-24)
+
+### Problem
+
+The Netlify deploy failed at **Functions bundling**:
+
+```
+The following serverless functions failed to deploy: vitest.config
+— change the function names to contain only alphanumeric characters,
+hyphens or underscores
+```
+
+Netlify treats **every top-level file** in the `functions` directory
+(`netlify/functions/`, per `netlify.toml`) as a serverless function entrypoint.
+The `@goldsmith/functions` workspace kept its `package.json`, `tsconfig.json`,
+`vitest.config.ts`, and `tests/` **inside** that directory, so Netlify tried to
+bundle `vitest.config.ts` as a function — and `vitest.config` is not a legal
+function name (the `.` breaks the alphanumeric/hyphen/underscore rule).
+
+### Fix — move the workspace scaffolding up one level to `netlify/`
+
+The `functions` directory in `netlify.toml` is unchanged (`netlify/functions`);
+what changed is that **only the two entrypoints and their `lib/` helpers** now
+live in it. Everything Netlify shouldn't bundle moved up to `netlify/`:
+
+- `netlify/functions/package.json` → `netlify/package.json`
+- `netlify/functions/tsconfig.json` → `netlify/tsconfig.json`
+- `netlify/functions/vitest.config.ts` → `netlify/vitest.config.ts`
+- `netlify/functions/tests/` → `netlify/tests/`
+- `netlify/functions/README.md` → `netlify/README.md`
+
+`netlify/functions/` top level now contains only `ai-draft.ts`, `export.ts`, and
+`lib/`. The `@goldsmith/functions` package name and its CI job are unchanged;
+only its on-disk root moved.
+
+Paths updated to match the new roots:
+
+- `pnpm-workspace.yaml`: member `netlify/functions` → `netlify`.
+- `netlify/tsconfig.json`: `extends ../tsconfig.base.json`, `@spec` → `../spec/*`,
+  `include` now `functions/lib`, `functions/ai-draft.ts`, `functions/export.ts`,
+  `tests`, `vitest.config.ts`.
+- `netlify/vitest.config.ts`: `@spec` alias `../spec` (was `../../spec`); the
+  `tests/**` include is unchanged (tests are now `netlify/tests/`).
+- `netlify/tests/*`: imports of function code `../lib/…`, `../export.ts` →
+  `../functions/lib/…`, `../functions/export.ts`.
+- `README.md`: opt-in test commands `pnpm --filter ./netlify/functions` →
+  `pnpm --filter ./netlify`.
+
+`netlify.toml` needed no change (the `functions` dir and `included_files` are the
+same), and `lib/prompts.ts`'s prompt-dir probing is unchanged because `lib/`
+stayed at `netlify/functions/lib/`. `pnpm lint`, `typecheck`, `test`, and `build`
+all pass from the new layout.

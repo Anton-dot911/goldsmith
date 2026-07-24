@@ -1,0 +1,20 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "@spec/*": ["../spec/*"]
+    }
+  },
+  "include": [
+    "functions/lib",
+    "tests",
+    "functions/ai-draft.ts",
+    "functions/export.ts",
+    "vitest.config.ts"
+  ]
+}

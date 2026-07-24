@@ -3,8 +3,8 @@ import addFormats from "ajv-formats";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import exportSchema from "@spec/export.schema.json";
-import exportHandler from "../export.ts";
-import { makeAdmin } from "../lib/supabase-admin.ts";
+import exportHandler from "../functions/export.ts";
+import { makeAdmin } from "../functions/lib/supabase-admin.ts";
 
 // Live end-to-end check of the CI export endpoint: seed a dataset with an active
 // and an inactive example, invoke the real handler (bearer auth + DB read +

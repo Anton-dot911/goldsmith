@@ -52,13 +52,13 @@ GOLDSMITH_INTEGRATION=1 SUPABASE_URL=... SUPABASE_ANON_KEY=... pnpm --filter ./w
 GOLDSMITH_AUTH_TEST=1 SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... pnpm --filter ./web test tests/auth-policies.integration.test.ts
 
 # ai-draft real-model smoke (text + PDF file_ref)
-GOLDSMITH_LLM=1 ANTHROPIC_API_KEY=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... pnpm --filter ./netlify/functions test tests/draft.smoke.test.ts
+GOLDSMITH_LLM=1 ANTHROPIC_API_KEY=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... pnpm --filter ./netlify test tests/draft.smoke.test.ts
 
 # export endpoint (live, bearer auth)
-GOLDSMITH_EXPORT=1 EXPORT_TOKEN=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... pnpm --filter ./netlify/functions test tests/export-live.smoke.test.ts
+GOLDSMITH_EXPORT=1 EXPORT_TOKEN=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... pnpm --filter ./netlify test tests/export-live.smoke.test.ts
 
 # acceptance / DoD timing run (10 inputs, drafted + saved)
-GOLDSMITH_ACCEPTANCE=1 ANTHROPIC_API_KEY=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... pnpm --filter ./netlify/functions test tests/acceptance.smoke.test.ts
+GOLDSMITH_ACCEPTANCE=1 ANTHROPIC_API_KEY=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... pnpm --filter ./netlify test tests/acceptance.smoke.test.ts
 ```
 
 ## Deploy (Netlify)
